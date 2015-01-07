@@ -18,3 +18,4 @@ hs_err_pid*
 #c9
 .c9
 npm-debug.log
+node_modules
