@@ -4,6 +4,13 @@ var fs = require("fs")
 var url = require("url")
 var path = require("path")
 
+function remove(arr, item) {
+   var i;
+   while((i = arr.indexOf(item)) !== -1) {
+     arr.splice(i, 1);
+   }
+}
+
 function createServer(dir) {
     var mimeTypes = {
     "html": "text/html",
@@ -72,7 +79,6 @@ exports.Server = function bootstrap(port, dirname) {
     })
 
     this.wss.on('connection', function(ws) {
-        console.log(ws)
         if (self.newConnections) self.newConnections.callback.call(self.newConnections.ctx, ws)
         ws.on('message', function(message) {
             console.log(message)
@@ -83,19 +89,36 @@ exports.Server = function bootstrap(port, dirname) {
                         console.log('missing property name')
                         return
                     }
-                    if (!msg.hasOwnProperty('arguments')) {
-                        console.log('missing property arguments')
+                    if (!msg.hasOwnProperty('args')) {
+                        console.log('missing property args')
+                        return
+                    }
+                    if (!msg.hasOwnProperty('id')) {
+                        console.log('missing property id')
                         return
                     }
                     var method = self.methods[msg.name]
                     if (method) {
                         var result = method.callback.apply(method.ctx, [ws].concat(msg.arguments))
-                        if (!result) result = null;
-                        ws.send(JSON.stringify({
-                            type: 'response',
-                            name: msg.name,
-                            result: result
-                        }));
+                        if(result instanceof Promise){
+                            result.then(function(result){
+                                if (!result) result = null
+                                ws.send(JSON.stringify({
+                                    type: 'response',
+                                    name: msg.name,
+                                    id: msg.id,
+                                    result: result
+                                }));
+                            });
+                        } else {
+                            if (!result) result = null
+                            ws.send(JSON.stringify({
+                                type: 'response',
+                                name: msg.name,
+                                id: msg.id,
+                                result: result
+                            }));
+                        }
                     }
                     else {
                         console.log('method ' + msg.name + ' not found')
@@ -106,6 +129,11 @@ exports.Server = function bootstrap(port, dirname) {
                 }
             }
         })
+        ws.on('close', function close() {
+            self.broadcasts.forEach(function(broadcast){
+                broadcast.remove(ws)
+            })
+        });
     })
 }
 
@@ -139,13 +167,16 @@ exports.Server.prototype.registerBroadcast = function(name) {
         addTarget: function(target) {
             targets.push(target)
         },
+        removeTarget: function(target){
+            remove(targets, target)
+        },
         send: function() {
-            var self = this
+            var args = Array.prototype.slice.apply(arguments)
             targets.forEach(function(ws) {
                 ws.send(JSON.stringify({
                     type: 'broadcast',
                     name: name,
-                    arguments: Array.prototype.slice(self.arguments,0)
+                    args: args
                 }))
             })
         }
