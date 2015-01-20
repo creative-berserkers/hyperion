@@ -1,6 +1,6 @@
 {
   "name": "cb-hyperion",
-  "version": "1.0.43",
+  "version": "1.0.44",
   "description": "Simple WebSocket server",
   "main": "hyperion.js",
   "scripts": {
@@ -17,6 +17,9 @@
   ],
   "dependencies" : { 
     "ws" : ">=0.6.0"
+  },
+  "engines": {
+    "node": ">=0.11.14"
   },
   "author": "@Odrinwhite",
   "license": "Apache 2.0",

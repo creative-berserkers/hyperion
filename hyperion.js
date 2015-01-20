@@ -1,8 +1,9 @@
 var WebSocketServer = require('ws').Server
-var http = require("http")
-var fs = require("fs")
-var url = require("url")
-var path = require("path")
+var http = require('http')
+var fs = require('fs')
+var url = require('url')
+var path = require('path')
+var deep = require('cb-multiobserve').deep
 
 function remove(arr, item) {
    var i;
@@ -63,10 +64,63 @@ function createServer(dir) {
     })
 }
 
+function handleCall(msg, ws, self){
+    if (!msg.hasOwnProperty('name')) {
+        console.log('missing property name')
+        return
+    }
+    if (!msg.hasOwnProperty('args')) {
+        console.log('missing property args')
+        return
+    }
+    if (!msg.hasOwnProperty('id')) {
+        console.log('missing property id')
+        return
+    }
+    var method = self.methods[msg.name]
+    if (method) {
+        var result = method.callback.apply(method.ctx, [ws].concat(msg.arguments))
+        if(result instanceof Promise){
+            result.then(function(result){
+                if (!result) result = null
+                ws.send(JSON.stringify({
+                    type: 'response',
+                    name: msg.name,
+                    id: msg.id,
+                    result: result
+                }));
+            });
+        } else {
+            if (!result) result = null
+            ws.send(JSON.stringify({
+                type: 'response',
+                name: msg.name,
+                id: msg.id,
+                result: result
+            }));
+        }
+    }
+    else {
+        console.log('method ' + msg.name + ' not found')
+    }
+}
+
+function handleGetObject(msg, ws, self){
+    if (!msg.hasOwnProperty('name')) {
+        console.log('missing property name')
+        return
+    }
+    if(self.objects[msg.name]){
+        self.objects[msg.name].peers.push(ws)
+        ws.send(self.objects[msg.name])
+    }
+}
+
 exports.Server = function bootstrap(port, dirname) {
     var self = this
     this.methods = []
     this.broadcasts = []
+    this.objects = []
     this.newConnections = null
 
     var server = createServer(dirname);
@@ -85,44 +139,12 @@ exports.Server = function bootstrap(port, dirname) {
             if (message) {
                 try {
                     var msg = JSON.parse(message)
-                    if (!msg.hasOwnProperty('name')) {
-                        console.log('missing property name')
+                    if (!msg.hasOwnProperty('type')) {
+                        console.log('missing property type')
                         return
                     }
-                    if (!msg.hasOwnProperty('args')) {
-                        console.log('missing property args')
-                        return
-                    }
-                    if (!msg.hasOwnProperty('id')) {
-                        console.log('missing property id')
-                        return
-                    }
-                    var method = self.methods[msg.name]
-                    if (method) {
-                        var result = method.callback.apply(method.ctx, [ws].concat(msg.arguments))
-                        if(result instanceof Promise){
-                            result.then(function(result){
-                                if (!result) result = null
-                                ws.send(JSON.stringify({
-                                    type: 'response',
-                                    name: msg.name,
-                                    id: msg.id,
-                                    result: result
-                                }));
-                            });
-                        } else {
-                            if (!result) result = null
-                            ws.send(JSON.stringify({
-                                type: 'response',
-                                name: msg.name,
-                                id: msg.id,
-                                result: result
-                            }));
-                        }
-                    }
-                    else {
-                        console.log('method ' + msg.name + ' not found')
-                    }
+                    if(msg.type === 'call') handleCall(msg, ws, self)
+                    if(msg.type === 'getObject') handleGetObject(msg, ws, self)
                 }
                 catch (e) {
                     console.log('wrong message format: ' + e)
@@ -188,4 +210,29 @@ exports.Server.prototype.registerBroadcast = function(name) {
 
 exports.Server.prototype.unregisterBroadcast = function(name) {
     this.broadcasts[name] = null
+}
+
+exports.Server.prototype.registerObject = function(name, object){
+    if(!this.objects[name]) return
+    var record = {
+        name : name,
+        object : object,
+        peers : []
+    }
+    Object.observe(object, function(changes){
+        record.peers.forEach(function(peer){
+            changes.forEach(function(change){
+                peer.send(JSON.stringify({
+                    path : change.path || [],
+                    value : change.node ? change.node[change.name] : change.object[change.name],
+                    oldValue : change.oldValue
+                }))
+            })
+        })
+    });
+    this.objects[name] = record
+}
+
+exports.Server.prototype.unregisterObject = function(name){
+    this.objects[name] = null
 }
