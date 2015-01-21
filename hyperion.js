@@ -93,7 +93,7 @@ function handleCall(msg, ws, self){
         } else {
             if (!result) result = null
             ws.send(JSON.stringify({
-                type: 'response',
+                type: 'call-response',
                 name: msg.name,
                 id: msg.id,
                 result: result
@@ -110,9 +110,17 @@ function handleGetObject(msg, ws, self){
         console.log('missing property name')
         return
     }
+    if (!msg.hasOwnProperty('id')) {
+        console.log('missing property id')
+        return
+    }
     if(self.objects[msg.name]){
         self.objects[msg.name].peers.push(ws)
-        ws.send(self.objects[msg.name])
+        ws.send(JSON.stringify({
+            type : 'object-response',
+            object : self.objects[msg.name].object,
+            id : msg.id
+        }))
     }
 }
 
@@ -144,7 +152,7 @@ exports.Server = function bootstrap(port, dirname) {
                         return
                     }
                     if(msg.type === 'call') handleCall(msg, ws, self)
-                    if(msg.type === 'getObject') handleGetObject(msg, ws, self)
+                    if(msg.type === 'get-object') handleGetObject(msg, ws, self)
                 }
                 catch (e) {
                     console.log('wrong message format: ' + e)
@@ -213,7 +221,7 @@ exports.Server.prototype.unregisterBroadcast = function(name) {
 }
 
 exports.Server.prototype.registerObject = function(name, object){
-    if(!this.objects[name]) return
+    if(this.objects[name]) return
     var record = {
         name : name,
         object : object,
@@ -223,6 +231,8 @@ exports.Server.prototype.registerObject = function(name, object){
         record.peers.forEach(function(peer){
             changes.forEach(function(change){
                 peer.send(JSON.stringify({
+                    type : 'object-broadcast',
+                    name : record.name,
                     path : change.path || [],
                     value : change.node ? change.node[change.name] : change.object[change.name],
                     oldValue : change.oldValue
