@@ -4,29 +4,46 @@ var fs = require('fs')
 var url = require('url')
 var path = require('path')
 var deep = require('cb-multiobserve').deep
+var util = require('cb-util').util
+
+function typeOf(value) {
+    var s = typeof value;
+    if (s === 'object') {
+        if (value) {
+            if (value instanceof Array) {
+                s = 'array'
+            }
+        }
+        else {
+            s = 'null';
+        }
+    }
+    return s;
+}
 
 function remove(arr, item) {
-   var i;
-   while((i = arr.indexOf(item)) !== -1) {
-     arr.splice(i, 1);
-   }
+    var i;
+    while ((i = arr.indexOf(item)) !== -1) {
+        arr.splice(i, 1);
+    }
 }
 
 function createServer(dir) {
     var mimeTypes = {
-    "html": "text/html",
-    "jpeg": "image/jpeg",
-    "jpg": "image/jpeg",
-    "png": "image/png",
-    "js": "text/javascript",
-    "css": "text/css"};
-    
+        "html": "text/html",
+        "jpeg": "image/jpeg",
+        "jpg": "image/jpeg",
+        "png": "image/png",
+        "js": "text/javascript",
+        "css": "text/css"
+    };
+
     return http.createServer(function(req, res) {
         var uri = url.parse(req.url).pathname;
         var unescapedUri = unescape(uri);
-        if(unescapedUri === '/') unescapedUri = 'index.html';
-        var filename = path.join(process.cwd()+dir, unescapedUri);
-        console.log('handling:' +filename);
+        if (unescapedUri === '/') unescapedUri = 'index.html';
+        var filename = path.join(process.cwd() + dir, unescapedUri);
+        console.log('handling:' + filename);
         var stats;
 
         try {
@@ -64,8 +81,12 @@ function createServer(dir) {
     })
 }
 
-function handleCall(msg, ws, self){
+function handleCall(msg, ws, self) {
     if (!msg.hasOwnProperty('name')) {
+        console.log('missing property name')
+        return
+    }
+    if (!msg.hasOwnProperty('path')) {
         console.log('missing property name')
         return
     }
@@ -77,57 +98,92 @@ function handleCall(msg, ws, self){
         console.log('missing property id')
         return
     }
-    var method = self.methods[msg.name]
-    if (method) {
-        var result = method.callback.apply(method.ctx, [ws].concat(msg.arguments))
-        if(result instanceof Promise){
-            result.then(function(result){
+    var c = self.objects[msg.name]
+    if (!c) return
+    var curr = c.object
+    msg.path.forEach(function(node) {
+        if (typeOf(curr[node]) === 'function') {
+            var method = curr[node]
+            var result = method.apply(c.object, [ws].concat(msg.arguments))
+            if (result instanceof Promise) {
+                result.then(function(result) {
+                    if (!result) result = null
+                    ws.send(JSON.stringify({
+                        type: 'call-response',
+                        name: msg.name,
+                        id: msg.id,
+                        result: result
+                    }));
+                });
+            }
+            else {
                 if (!result) result = null
                 ws.send(JSON.stringify({
-                    type: 'response',
+                    type: 'call-response',
                     name: msg.name,
                     id: msg.id,
                     result: result
                 }));
-            });
-        } else {
-            if (!result) result = null
-            ws.send(JSON.stringify({
-                type: 'call-response',
-                name: msg.name,
-                id: msg.id,
-                result: result
-            }));
+            }
         }
-    }
-    else {
-        console.log('method ' + msg.name + ' not found')
-    }
+    })
 }
 
-function handleGetObject(msg, ws, self){
+
+
+function handleGetObject(msg, ws, self) {
     if (!msg.hasOwnProperty('name')) {
         console.log('missing property name')
         return
     }
-    if (!msg.hasOwnProperty('id')) {
-        console.log('missing property id')
-        return
-    }
-    if(self.objects[msg.name]){
-        self.objects[msg.name].peers.push(ws)
+    if (self.objects[msg.name]) {
+        var object = null
+        if (self.objects[msg.name].type === 'request') {
+            if(!ws.objects) ws.objects = {}
+            if(!ws.objects[msg.name]){
+                object = self.objects[msg.name].callback(ws)
+                ws.objects[msg.name] = object
+                Object.observe(deep(object), function(changes) {
+    
+                    var result = changes.map(function(change) {
+                        return {
+                            type: change.type,
+                            path: change.path || [change.name],
+                            value: change.node ? change.node[change.name] : change.object[change.name],
+                            oldValue: change.oldValue
+                        }
+                    })
+    
+                    var msg = JSON.stringify({
+                        type: 'object-broadcast',
+                        name: msg.name,
+                        changes: result
+                    })
+    
+                    ws.send(msg)
+                });
+            }
+        } else {
+            object = self.objects[msg.name].object
+            self.objects[msg.name].peers.push(ws)
+        }
+        var escapedObject = {}
+        var methods = []
+        util.copyAndEscape(object, escapedObject, function(path) {
+            methods.push(path)
+        })
+        
         ws.send(JSON.stringify({
-            type : 'object-response',
-            object : self.objects[msg.name].object,
-            id : msg.id
+            type: 'object-response',
+            name: msg.name,
+            object: object,
+            methods: methods
         }))
     }
 }
 
 exports.Server = function bootstrap(port, dirname) {
     var self = this
-    this.methods = []
-    this.broadcasts = []
     this.objects = []
     this.newConnections = null
 
@@ -151,18 +207,19 @@ exports.Server = function bootstrap(port, dirname) {
                         console.log('missing property type')
                         return
                     }
-                    if(msg.type === 'call') handleCall(msg, ws, self)
-                    if(msg.type === 'get-object') handleGetObject(msg, ws, self)
+                    if (msg.type === 'object-call') handleCall(msg, ws, self)
+                    if (msg.type === 'get-object') handleGetObject(msg, ws, self)
                 }
                 catch (e) {
-                    console.log('wrong message format: ' + e)
+                    console.log('wrong message format: ')
+                    console.log(e)
                 }
             }
         })
         ws.on('close', function close() {
-            self.broadcasts.forEach(function(broadcast){
+            /*self.broadcasts.forEach(function(broadcast) {
                 broadcast.remove(ws)
-            })
+            })*/
         });
     })
 }
@@ -174,75 +231,53 @@ exports.Server.prototype.registerNewConnection = function(callback, ctx) {
     }
 }
 
-exports.Server.prototype.registerMethod = function(name, callback, ctx) {
-    this.methods[name] = {
-        callback: callback,
-        ctx: ctx
-    }
-}
-
-exports.Server.prototype.unregisterMethod = function(name) {
-    this.methods[name] = null
-}
-
-exports.Server.prototype.registerBroadcast = function(name) {
-
-    if (this.broadcasts[name]) {
-        return this.broadcasts[name];
-    }
-
-    var targets = []
-
-    var broadcast = {
-        addTarget: function(target) {
-            targets.push(target)
-        },
-        removeTarget: function(target){
-            remove(targets, target)
-        },
-        send: function() {
-            var args = Array.prototype.slice.apply(arguments)
-            targets.forEach(function(ws) {
-                ws.send(JSON.stringify({
-                    type: 'broadcast',
-                    name: name,
-                    args: args
-                }))
-            })
-        }
-    }
-
-    this.broadcasts[name] = broadcast
-    return broadcast
-}
-
-exports.Server.prototype.unregisterBroadcast = function(name) {
-    this.broadcasts[name] = null
-}
-
-exports.Server.prototype.registerObject = function(name, object){
-    if(this.objects[name]) return
+exports.Server.prototype.registerObject = function(name, object) {
+    if (this.objects[name]) return
     var record = {
-        name : name,
-        object : object,
-        peers : []
+        name: name,
+        type: 'global',
+        object: object,
+        peers: []
     }
-    Object.observe(object, function(changes){
-        record.peers.forEach(function(peer){
-            changes.forEach(function(change){
-                peer.send(JSON.stringify({
-                    type : 'object-broadcast',
-                    name : record.name,
-                    path : change.path || [],
-                    value : change.node ? change.node[change.name] : change.object[change.name],
-                    oldValue : change.oldValue
-                }))
-            })
+    Object.observe(deep(object), function(changes) {
+
+        var result = changes.map(function(change) {
+            return {
+                type: change.type,
+                path: change.path || [change.name],
+                value: change.node ? change.node[change.name] : change.object[change.name],
+                oldValue: change.oldValue
+            }
+        })
+
+        var msg = JSON.stringify({
+            type: 'object-broadcast',
+            name: record.name,
+            changes: result
+        })
+
+        record.peers.forEach(function(peer) {
+            peer.send(msg)
         })
     });
     this.objects[name] = record
 }
 
-exports.Server.prototype.unregisterObject = function(name){
+exports.Server.prototype.unregisterObject = function(name) {
+    this.objects[name] = null
+}
+
+exports.Server.prototype.registerObjectGenerator = function(name, callback) {
+    if (!this.objects[name]) {
+        this.objects[name] = {
+            name: name,
+            type: 'request',
+            callback: callback
+        }
+    }
+
+}
+
+exports.Server.prototype.unregisterObjectGenerator = function(name) {
     this.objects[name] = null
 }
