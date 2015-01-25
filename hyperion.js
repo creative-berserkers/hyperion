@@ -29,8 +29,8 @@ function remove(arr, item) {
 }
 
 function send(ws, object){
-    console.log('<=')
-    console.log(object)
+    //console.log('<=')
+    //console.log(object)
     ws.send(JSON.stringify(object))
 }
 
@@ -209,8 +209,8 @@ exports.Server = function bootstrap(port, dirname) {
     this.wss.on('connection', function(ws) {
         if (self.newConnections) self.newConnections.callback.call(self.newConnections.ctx, ws)
         ws.on('message', function(message) {
-            console.log('=>')
-            console.log(message)
+            //console.log('=>')
+            //console.log(message)
             if (message) {
                 try {
                     var msg = JSON.parse(message)
@@ -228,6 +228,7 @@ exports.Server = function bootstrap(port, dirname) {
             }
         })
         ws.on('close', function close() {
+            if (self.onDisconnect) self.onDisconnect.callback.call(self.onDisconnect.ctx, ws)
             /*self.broadcasts.forEach(function(broadcast) {
                 broadcast.remove(ws)
             })*/
@@ -242,14 +243,21 @@ exports.Server.prototype.registerNewConnection = function(callback, ctx) {
     }
 }
 
+exports.Server.prototype.registerOnDisconnect = function(callback, ctx) {
+    this.onDisconnect = {
+        callback: callback,
+        ctx: ctx
+    }
+}
+
 exports.Server.prototype.registerObject = function(name, object) {
     if (this.objects[name]) return
-    var record = {
+    var record = this.objects[name] || {
         name: name,
         type: 'global',
         object: object,
         peers: []
-    }
+    } 
     Object.observe(deep(object), function(changes) {
 
         var result = changes.map(function(change) {
@@ -258,7 +266,7 @@ exports.Server.prototype.registerObject = function(name, object) {
                     type : change.arrayChangeType,
                     path: change.path || [change.name],
                     index : change.index,
-                    added: change.node.slice(change.index,change.addedCount),
+                    added: change.node.slice(change.index,change.index+change.addedCount),
                     removedCount: change.removed.length
                 }
             } else {
