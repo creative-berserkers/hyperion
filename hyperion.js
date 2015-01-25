@@ -253,11 +253,21 @@ exports.Server.prototype.registerObject = function(name, object) {
     Object.observe(deep(object), function(changes) {
 
         var result = changes.map(function(change) {
-            return {
-                type: change.type,
-                path: change.path || [change.name],
-                value: change.node ? change.node[change.name] : change.object[change.name],
-                oldValue: change.oldValue
+            if(change.arrayChangeType){
+                return {
+                    type : change.arrayChangeType,
+                    path: change.path || [change.name],
+                    index : change.index,
+                    added: change.node.slice(change.index,change.addedCount),
+                    removedCount: change.removed.length
+                }
+            } else {
+                return {
+                    type: change.type,
+                    path: change.path || [change.name],
+                    value: change.node ? change.node[change.name] : change.object[change.name],
+                    oldValue: change.oldValue
+                }
             }
         })
         
