@@ -28,6 +28,12 @@ function remove(arr, item) {
     }
 }
 
+function send(ws, object){
+    console.log('<=')
+    console.log(object)
+    ws.send(JSON.stringify(object))
+}
+
 function createServer(dir) {
     var mimeTypes = {
         "html": "text/html",
@@ -100,30 +106,36 @@ function handleCall(msg, ws, self) {
     }
     var c = self.objects[msg.name]
     if (!c) return
-    var curr = c.object
+    var curr = null
+    if(c.type === 'request'){
+        if(!ws.objects[msg.name]) return
+        curr = ws.objects[msg.name]
+    } else {
+        curr = c.object
+    }
     msg.path.forEach(function(node) {
         if (typeOf(curr[node]) === 'function') {
             var method = curr[node]
-            var result = method.apply(c.object, [ws].concat(msg.arguments))
+            var result = method.apply(c.object, [ws].concat(msg.args))
             if (result instanceof Promise) {
                 result.then(function(result) {
                     if (!result) result = null
-                    ws.send(JSON.stringify({
+                    send(ws,{
                         type: 'call-response',
                         name: msg.name,
                         id: msg.id,
                         result: result
-                    }));
+                    })
                 });
             }
             else {
                 if (!result) result = null
-                ws.send(JSON.stringify({
+                send(ws,{
                     type: 'call-response',
                     name: msg.name,
                     id: msg.id,
                     result: result
-                }));
+                })
             }
         }
     })
@@ -154,13 +166,11 @@ function handleGetObject(msg, ws, self) {
                         }
                     })
     
-                    var msg = JSON.stringify({
+                    send(ws,{
                         type: 'object-broadcast',
                         name: msg.name,
                         changes: result
                     })
-    
-                    ws.send(msg)
                 });
             }
         } else {
@@ -173,12 +183,12 @@ function handleGetObject(msg, ws, self) {
             methods.push(path)
         })
         
-        ws.send(JSON.stringify({
+        send(ws,{
             type: 'object-response',
             name: msg.name,
-            object: object,
+            object: escapedObject,
             methods: methods
-        }))
+        })
     }
 }
 
@@ -199,6 +209,7 @@ exports.Server = function bootstrap(port, dirname) {
     this.wss.on('connection', function(ws) {
         if (self.newConnections) self.newConnections.callback.call(self.newConnections.ctx, ws)
         ws.on('message', function(message) {
+            console.log('=>')
             console.log(message)
             if (message) {
                 try {
@@ -249,15 +260,15 @@ exports.Server.prototype.registerObject = function(name, object) {
                 oldValue: change.oldValue
             }
         })
-
-        var msg = JSON.stringify({
+        
+        var msg = {
             type: 'object-broadcast',
             name: record.name,
             changes: result
-        })
+        }
 
         record.peers.forEach(function(peer) {
-            peer.send(msg)
+            send(peer, msg)
         })
     });
     this.objects[name] = record
