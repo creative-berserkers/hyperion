@@ -2,7 +2,7 @@
   "name": "cb-hyperion",
   "version": "1.0.97",
   "description": "Simple WebSocket server",
-  "main": "hyperion.js",
+  "main": "lib/hyperion.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -15,8 +15,7 @@
     "broadcast",
     "server"
   ],
-  "dependencies" : { 
-    "ws" : ">=0.6.0",
+  "dependencies" : {
     "cb-multiobserve" : ">=1.0.9",
     "cb-util" : ">=0.0.1"
   },
