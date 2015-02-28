@@ -5,137 +5,95 @@ const assert = require('assert')
 
 describe('message-validator', () => {
     describe('#validateMessage(msg)', () => {
-        it('return result - missing type', () => {
-            const result = validateMessage({
+        it('should throw missing type', () => {
+            expect(validateMessage.bind(null,{
                 invalid: 'invalid'
-            })
-
-            expect(result.isValid).to.eql(false)
-            expect(result.errCode).to.eql(1)
-            expect(result.errDesc).to.eql('Missing type property')
+            })).to.throw('Missing type property.')
         })
         
-        it('return result - wrong type', () => {
-            const result = validateMessage({
+        it('should throw wrong type', () => {
+            expect(validateMessage.bind(null,{
                 type: 'invalid'
-            })
-
-            expect(result.isValid).to.eql(false)
-            expect(result.errCode).to.eql(2)
-            expect(result.errDesc).to.eql('Type must be one of [object-get,object-call]')
+            })).to.throw('Type must be one of [object-get,object-call].')
         })
     })
         
     describe('#validateMessage(msg) with msg.type === object-get', () => {
         
-        it('return result - missing name', () => {
-            const result = validateMessage({
+        it('should throw missing name', () => {
+            expect(validateMessage.bind(null,{
                 type: 'object-get'
-            })
-
-            expect(result.isValid).to.eql(false)
-            expect(result.errCode).to.eql(3)
-            expect(result.errDesc).to.eql('Missing name property')
+            })).to.throw('Missing name property.')
         })
         
-        it('return result - ok', () => {
-            const result = validateMessage({
+        it('should not throw', () => {
+            const msg = {
                 type: 'object-get',
                 name: 'mySecretObject'
-            })
-
-            expect(result.isValid).to.eql(true)
-            expect(result.errCode).to.eql(undefined)
-            expect(result.errDesc).to.eql(undefined)
+            } 
+            expect(validateMessage(msg)).to.eql(msg)
         })
     })
     
     
     describe('#validateMessage(msg) with msg.type === object-call', () => {
         
-        it('return result - missing name', () => {
-            const result = validateMessage({
+        it('should throw missing name', () => {
+            expect(validateMessage.bind(null,{
                 type: 'object-call'
-            })
-
-            expect(result.isValid).to.eql(false)
-            expect(result.errCode).to.eql(3)
-            expect(result.errDesc).to.eql('Missing name property')
+            })).to.throw('Missing name property.');
         })
         
-        it('return result - missing path', () => {
-            const result = validateMessage({
+        it('should throw missing path', () => {
+            expect(validateMessage.bind(null,{
                 type: 'object-call',
                 name: 'mySecretObject'
-            })
-
-            expect(result.isValid).to.eql(false)
-            expect(result.errCode).to.eql(4)
-            expect(result.errDesc).to.eql('Missing path property')
+            })).to.throw('Missing path property.')
         })
         
-        it('return result - path is not array', () => {
-            const result = validateMessage({
+        it('should throw path is not array', () => {
+            expect(validateMessage.bind(null,{
                 type: 'object-call',
                 name: 'mySecretObject',
                 path: 'wrong-path'
-            })
-
-            expect(result.isValid).to.eql(false)
-            expect(result.errCode).to.eql(5)
-            expect(result.errDesc).to.eql('Property path is not an array')
+            })).to.throw('Property path is not an array.')
         })
         
-        it('return result - missing args', () => {
-            const result = validateMessage({
+        it('should throw missing args', () => {
+            expect(validateMessage.bind(null,{
                 type: 'object-call',
                 name: 'mySecretObject',
                 path: ['propX']
-            })
-
-            expect(result.isValid).to.eql(false)
-            expect(result.errCode).to.eql(6)
-            expect(result.errDesc).to.eql('Missing args property')
+            })).to.throw('Missing args property.')
         })
         
-        it('return result - args is not array', () => {
-            const result = validateMessage({
+        it('should throw args is not array', () => {
+            expect(validateMessage.bind(null,{
                 type: 'object-call',
                 name: 'mySecretObject',
                 path: ['propX'],
                 args: 'invalid args'
-            })
-
-            expect(result.isValid).to.eql(false)
-            expect(result.errCode).to.eql(7)
-            expect(result.errDesc).to.eql('Property args is not an array')
+            })).to.throw('Property args is not an array.')
         })
         
-        it('return result - missing id', () => {
-            const result = validateMessage({
+        it('should throw missing id', () => {
+            expect(validateMessage.bind(null,{
                 type: 'object-call',
                 name: 'mySecretObject',
                 path: ['propX'],
                 args: ['arg1']
-            })
-
-            expect(result.isValid).to.eql(false)
-            expect(result.errCode).to.eql(8)
-            expect(result.errDesc).to.eql('Missing id property')
+            })).to.throw('Missing id property.')
         })
         
-        it('return result - ok', () => {
-            const result = validateMessage({
+        it('should not throw', () => {
+            const msg = {
                 type: 'object-call',
                 name: 'mySecretObject',
                 path: ['propX'],
                 args: ['arg1'],
                 id: 'some_id34'
-            })
-
-            expect(result.isValid).to.eql(true)
-            expect(result.errCode).to.eql(undefined)
-            expect(result.errDesc).to.eql(undefined)
+            }
+            expect(validateMessage(msg)).to.eql(msg)
         })
     })
 })
