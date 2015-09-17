@@ -13,7 +13,7 @@ describe('hyperion', () => {
 
                 return Object.freeze({
                     send: (ctx, msg) => {},
-                    leave: (ctx) => {},
+                    leave: (ctx) => {}
                 })
             }
 

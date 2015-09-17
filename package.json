@@ -1,6 +1,6 @@
 {
   "name": "cb-hyperion",
-  "version": "1.1.9",
+  "version": "1.4.3",
   "description": "Simple WebSocket server",
   "main": "lib/hyperion.js",
   "scripts": {
@@ -16,7 +16,7 @@
     "server"
   ],
   "dependencies" : {
-    "cb-multiobserve" : ">=1.0.9"
+    "cb-multiobserve" : "2.3.2"
   },
   "engines": {
     "iojs": ">=1.4.0"
