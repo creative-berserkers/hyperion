@@ -1,10 +1,11 @@
 {
   "name": "cb-hyperion",
-  "version": "1.4.4",
+  "version": "1.6.0",
   "description": "Simple WebSocket server",
   "main": "lib/hyperion.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node node_modules/mocha/bin/_mocha --ui tdd",
+    "watch-test" : "node node_modules/mocha/bin/_mocha --watch --reporter spec test"
   },
   "repository": {
     "type": "git",
@@ -15,16 +16,20 @@
     "broadcast",
     "server"
   ],
-  "dependencies" : {
-    "cb-multiobserve" : "2.3.2"
+  "dependencies": {
+    "cb-multiobserve": "2.3.2"
   },
   "engines": {
     "iojs": ">=1.4.0"
   },
   "author": "@Odrinwhite",
-  "license": "unlicense",
+  "license": "Unlicense",
   "bugs": {
     "url": "https://github.com/creative-berserkers/hyperion/issues"
   },
-  "homepage": "https://github.com/creative-berserkers/hyperion"
+  "homepage": "https://github.com/creative-berserkers/hyperion",
+  "devDependencies": {
+    "chai": "^3.2.0",
+    "mocha": "^2.3.2"
+  }
 }
