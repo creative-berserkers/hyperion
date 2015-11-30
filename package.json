@@ -1,6 +1,6 @@
 {
   "name": "cb-hyperion",
-  "version": "1.8.3",
+  "version": "1.11.1",
   "description": "Simple WebSocket server",
   "main": "lib/hyperion.js",
   "scripts": {

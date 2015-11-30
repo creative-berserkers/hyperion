@@ -33,7 +33,9 @@ describe('hyperion', () => {
 
             const server = hyperion({
                 wss: wssMock,
-                index: rootObject
+                modelSpec: {
+                    model : rootObject
+                }
             })
 
 
